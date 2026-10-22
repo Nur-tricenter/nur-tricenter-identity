@@ -31,6 +31,8 @@
       published, never how it travels.
     -->
     <PackageReference Include="Joseco.Communication.External.Contracts" />
+    <!-- Permission names and the platform-wide expansion live in the shared kernel. -->
+    <PackageReference Include="Nur.Tricenter.Access" />
     <PackageReference Include="MediatR" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />

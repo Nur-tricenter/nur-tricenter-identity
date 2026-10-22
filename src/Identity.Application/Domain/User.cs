@@ -142,7 +142,10 @@ public class User : AggregateRoot
             name,
             passwordHash,
             isAdministrator: true,
-            new[] { Contracts.IdentityPermissions.All },
+            // The PLATFORM sentinel, not identity's own. The seeded account is the operator's way
+            // into the whole stack, so it must reach the catalog too — and identity can grant that
+            // only by naming a scope the catalog recognises, which is what the shared kernel is for.
+            new[] { Nur.Tricenter.Access.PlatformPermissions.All },
             DateTime.UtcNow);
     }
 

@@ -25,6 +25,46 @@
 # =============================================================================
 
 services:
+  # ---------------------------------------------------------------------------
+  # Schema is applied by a ONE-SHOT step, not by a host on boot.
+  #
+  # Without this, a fresh volume leaves identity broken with
+  # `42P01: relation "outbox.outboxMessage" does not exist` until somebody runs
+  # `dotnet run --project src/Identity.App -- --migrate` by hand. Verified: that is
+  # exactly what happened on the last clean start.
+  #
+  # A one-shot job rather than "migrate on every boot" because several replicas
+  # racing each other through Migrate() on every rollout is how a service ends up
+  # wedged in a crash loop on a lock, and it gives the application pod's runtime
+  # user DDL rights it should never have had.
+  #
+  # It runs the SAME image as identity-api with `--migrate` appended, so the
+  # schema always matches the binaries the API is about to run.
+  # ---------------------------------------------------------------------------
+  identity-migrate:
+    image: mcr.microsoft.com/dotnet/aspnet:8.0
+    container_name: nur-tricenter-identity-migrate
+    hostname: identity-migrate
+    working_dir: /app
+    command: ["dotnet", "Identity.App.dll", "--migrate"]
+    volumes:
+      - ./src/Identity.App/bin/Debug/net8.0:/app:ro
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=nur-tricenter-postgres;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+      # AddSecurity refuses to compose without a signing key, and --migrate builds
+      # the host, so the key is required even by the migration step.
+      Jwt__SecretKey: "dev-only-signing-key-not-a-secret-0123456789"
+      Jwt__ValidIssuer: "nur-tricenter-identity"
+      Jwt__ValidAudience: "nur-tricenter-clients"
+      Jwt__Lifetime: "3600"
+    networks: [nur-tricenter-net]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   identity-api:
     image: mcr.microsoft.com/dotnet/aspnet:8.0
     container_name: nur-tricenter-identity-api
@@ -70,6 +110,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      identity-migrate:
+        # The API must not serve traffic against a schema that does not exist.
+        # service_completed_successfully, not service_started: the job has to have
+        # actually applied the migrations, and a failed job must stop the rollout
+        # rather than let the API crash-loop against a half-migrated database.
+        condition: service_completed_successfully
       consul:
         condition: service_started
     healthcheck:
@@ -115,6 +161,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      identity-migrate:
+        # The drain must not run against a schema that does not exist: it polls
+        # outbox.outboxMessage and would fail on every tick until it settles.
+        condition: service_completed_successfully
       rabbitmq:
         # service_healthy, not service_started: the outbox processor connects as
         # soon as it starts, and a broker still booting turns every publish

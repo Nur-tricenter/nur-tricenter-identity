@@ -11,7 +11,11 @@ namespace Identity.App.Controllers;
 /// administrator holds through the expanded wildcard and a regular account does not.
 /// </summary>
 [ApiController]
-[Route("api/users")]
+/// <remarks>
+/// The <c>/api/v1</c> prefix is the platform convention; see <see cref="AuthController"/> for why
+/// the gateway depends on it.
+/// </remarks>
+[Route("api/v1/users")]
 [Authorize]
 public class UserController : ControllerBase
 {

@@ -13,7 +13,14 @@ namespace Identity.App.Controllers;
 /// exists is to turn a credential into a token.
 /// </summary>
 [ApiController]
-[Route("api/auth")]
+/// <remarks>
+/// The <c>/api/v1</c> prefix is the platform convention, matching the catalog's controllers
+/// (<c>[Route("api/v1/foods")]</c>). It is not cosmetic: the API gateway applies
+/// <c>PathPrefix: /api</c> when it forwards, so a service exposing <c>/api/...</c> would be
+/// requested as <c>/api/api/...</c> upstream and 404. Aligning here is what lets one gateway
+/// route every service without knowing anything about its internal shape.
+/// </remarks>
+[Route("api/v1/auth")]
 public class AuthController : ControllerBase
 {
     private readonly ILoginService _login;

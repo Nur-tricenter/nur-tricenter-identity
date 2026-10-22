@@ -84,9 +84,17 @@ public sealed class DefaultUserInitializer : IDefaultUserInitializer
 
         _context.Users.Add(administrator);
 
-        // The wildcard goes in the join table too, so the record reads the same way whether scopes
-        // are loaded through the aggregate or queried directly.
-        _context.UserScopes.Add(new UserScope(administrator.Id, IdentityPermissions.All));
+        // Read the scopes off the aggregate rather than restating the sentinel here.
+        //
+        // Naming `IdentityPermissions.All` here duplicated the decision that
+        // User.CreateAdministrator already made, and when the administrator moved to the
+        // platform-wide wildcard this line silently kept writing the old one: the aggregate said
+        // platform:* while the row said identity:*, and the token came out scoped to identity
+        // only. The aggregate is the single place that decides what an administrator holds.
+        foreach (var scope in administrator.Scopes)
+        {
+            _context.UserScopes.Add(new UserScope(administrator.Id, scope));
+        }
 
         // CommitAsync, NOT SaveChangesAsync. This is the whole reason the seeder goes through the
         // UnitOfWork: SaveChanges persists the tracked entities but never looks at the aggregate's
