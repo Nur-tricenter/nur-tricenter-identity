@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Identity.Application/Identity.Application.csproj" />
+    <Project Path="src/Identity.Infrastructure/Identity.Infrastructure.csproj" />
+    <Project Path="src/Identity.App/Identity.App.csproj" />
+    <Project Path="src/Identity.WorkerService/Identity.WorkerService.csproj" />
+  </Folder>
+</Solution>

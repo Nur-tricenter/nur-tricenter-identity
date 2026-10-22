@@ -1,0 +1,32 @@
+## Build artifacts
+bin/
+obj/
+out/
+artifacts/
+*.nupkg
+*.snupkg
+
+## .NET / VS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Local dev settings (never committed)
+appsettings.Development.json
+appsettings.Local.json
+.env
+.env.local
+
+## Credentials for the private NuGet feed. The Dockerfiles mount these as build
+## secrets (docker build --secret id=nuget_token,env=NUGET_TOKEN), so they are
+## read from the environment and never baked into an image layer. A file that
+## held them would be committed by accident and would defeat the whole point.
+nuget.token
+nuget.username

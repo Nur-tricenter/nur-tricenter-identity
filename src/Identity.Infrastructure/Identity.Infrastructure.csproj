@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The infrastructure layer: EF Core mappings, the JSON-based outbox
+    repository, the Sqlite/Postgres migrator, the default-user seeder, and
+    the RabbitMqExternalPublisher wrapper. It depends on the application
+    layer because it implements the abstractions declared there, and on
+    every vendor library this service has to wire.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Identity.Infrastructure</RootNamespace>
+    <AssemblyName>Identity.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Identity.Application\Identity.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" />
+    <!-- Self-registration in Consul, so the gateway discovers this instance instead of holding a
+         static address list. Opt-in: nothing registers unless ServiceDiscoveryAddress is set. -->
+    <PackageReference Include="Consul" />
+    <!--
+      Traces and metrics. The kernel owns the meter collection rule, which is the part that is
+      easy to get wrong: a meter not on its list is counted in-process and silently never exported.
+    -->
+    <PackageReference Include="Nur.Tricenter.Observability" />
+    <PackageReference Include="Joseco.Outbox.EFCore" />
+    <PackageReference Include="Joseco.Communication.External.Contracts" />
+    <PackageReference Include="Joseco.Communication.External.RabbitMQ" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Scrutor" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+</Project>

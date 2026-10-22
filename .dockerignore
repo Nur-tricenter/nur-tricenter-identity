@@ -1,0 +1,42 @@
+# The build context is this repository, and nothing outside it is needed: the platform kernels are
+# NuGet packages from GitHub Packages, not a sibling folder.
+#
+#   docker build -f src/Identity.App/Dockerfile -t nur-tricenter-identity-api .
+
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+**/.git/
+**/.gitignore
+**/.github/
+**/node_modules/
+
+# Local development credentials. A git-ignored appsettings.Development.json is git-ignored
+# precisely because it carries a real connection string; it must never end up inside an image layer
+# either.
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/.env
+**/.env.*
+
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/publish/
+**/coverage/
+**/TestResults/
+**/binlog/
+**/*.log
+
+**/Test/
+**/tests/
+**/*Tests/
+
+# Not needed to build or run. The Dockerfiles build from source; the platform's bind-mounted
+# containers read these directories directly from the host instead of copying them into an image.
+# `identity.compose.yml` is excluded for the same reason: the standalone stack builds its own
+# images and never needs the platform variant's file.
+**/*.md
+identity.compose.yml

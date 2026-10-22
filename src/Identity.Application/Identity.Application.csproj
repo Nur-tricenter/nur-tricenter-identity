@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The application layer: the User aggregate, the domain events it raises,
+    the outbox staging handlers, the external integration contracts and
+    domain abstractions.
+
+    No dependency on EF Core or on a broker implementation: the layer declares
+    WHAT is published, and Identity.Infrastructure owns HOW it is persisted and
+    transported. That is what keeps the domain testable without a database.
+
+    Following the reference architecture: Identity has no Domain project, so the
+    user-shaped invariants live here — factory methods that decide whether an
+    account is valid, and the events it raises when it changes. See section 3.3
+    of the guide.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Identity.Application</RootNamespace>
+    <AssemblyName>Identity.Application</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Joseco.DDD.Core" />
+    <PackageReference Include="Joseco.Outbox.Contracts" />
+    <!--
+      Referenced for the interfaces the integration publishers implement:
+      IExternalPublisher, INotificationHandler, IServiceCollection and
+      IntegrationMessage. The RabbitMQ transport that IMPLEMENTS IExternalPublisher
+      is deliberately not referenced here — the application layer states what is
+      published, never how it travels.
+    -->
+    <PackageReference Include="Joseco.Communication.External.Contracts" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>

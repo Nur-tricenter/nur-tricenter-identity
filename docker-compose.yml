@@ -1,0 +1,217 @@
+# =============================================================================
+#  Identity — standalone stack.
+#
+#  This file makes nur-tricenter-identity self-sufficient, the same way
+#  ms2-plans-and-recipes-catalog is: one command brings up everything this
+#  service needs, with no dependency on a sibling repository.
+#
+#      docker compose up -d
+#
+#  It owns its own network (identity-net), its own Postgres and its own
+#  volumes, so it can be brought up, torn down and debugged without touching
+#  anything else on the machine.
+#
+#  ---------------------------------------------------------------------------
+#  HOW THIS RELATES TO THE ORCHESTRATOR'S STACK
+#  ---------------------------------------------------------------------------
+#  The orchestrator does NOT use this file. It includes
+#  identity.compose.yml instead, which declares the same two business services
+#  but attaches them to the SHARED platform network and points them at the
+#  platform's Postgres, RabbitMQ and Consul.
+#
+#  Two files, one pair of services, because they answer different questions:
+#
+#    this file       "does identity work on its own?"      -> yes, everything inline
+#    identity.compose.yml "does identity work in the platform?" -> yes, shared infra
+#
+#  What is deliberately NOT duplicated here: RabbitMQ and Consul. Declaring a
+#  second broker on this machine would collide with the platform's on host port
+#  5672, and Joseco.Communication.External.RabbitMQ 1.1.0 builds its
+#  ConnectionFactory from HostName/UserName/Password only — silently ignoring
+#  Port — so a broker on any other port would make publish and consume talk to
+#  different endpoints with no error at all. Host 5672 is therefore a hard
+#  requirement, not a preference.
+#
+#  For the same reason, ServiceRegistration is NOT configured below: with no
+#  agent to talk to, registration would fail and (correctly) log a warning while
+#  doing nothing. Add ServiceRegistration__* to `identity-api` when you want to
+#  exercise discovery.
+# =============================================================================
+
+name: nur-tricenter-identity
+
+# Container names are prefixed `identity-standalone-`, NOT `nur-tricenter-identity-`.
+#
+# The platform stack gives its identity containers the platform-prefixed names
+# (nur-tricenter-identity-api, ...), and two stacks cannot share a container name:
+# the second `up` fails with "the container name is already in use". Prefixing the
+# standalone ones keeps BOTH stacks runnable on the same machine at the same time,
+# which is the whole point of a stack that is independent.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: identity-standalone-db
+    environment:
+      POSTGRES_DB: nur_tricenter_identity
+      POSTGRES_USER: dev-only
+      POSTGRES_PASSWORD: dev-only-password
+    ports:
+      # Host 5434, not 5433: the platform's Postgres already publishes 5433, and
+      # two stacks that both claim the same host port cannot start together.
+      - "5434:5432"
+    volumes:
+      - identity-db-data:/var/lib/postgresql/data
+    networks: [identity-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev-only -d nur_tricenter_identity"]
+      interval: 1s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Schema is applied by a ONE-SHOT step, not by a host on boot.
+  #
+  #   docker compose run --rm api-migrate
+  #
+  # A migrating application pod is a bad place to run DDL: several replicas
+  # racing each other through Migrate() on every rollout is how a service ends
+  # up wedged in a crash loop on a lock, and it gives the application pod's
+  # runtime user DDL rights it should never have had. The API below therefore
+  # never migrates, and depends on this job having SUCCEEDED.
+  # ---------------------------------------------------------------------------
+  api-migrate:
+    # Built from this working tree, not pulled from a registry: the image has to be a function
+    # of the code in this folder, otherwise editing a file and re-running `up` starts the
+    # previously built image and the change appears to do nothing.
+    #
+    # `context` is the repository ROOT, not src/Identity.App: the Dockerfile has to COPY
+    # Directory.Packages.props, Directory.Build.props and NuGet.config, which live at the root,
+    # and Docker cannot copy from outside the build context. `dockerfile` is therefore the path
+    # from the context root to the file.
+    #
+    # The private feed needs credentials, and they arrive as build SECRETS rather than ARG/ENV
+    # so no token is ever baked into an image layer. Compose forwards the host environment to
+    # them, so supply the two variables and then build:
+    #
+    #   $env:NUGET_USERNAME = "..."
+    #   $env:NUGET_TOKEN    = "..."      # NUGET_TOKEN, not NUGET_AUTH_TOKEN: this is the
+    #                                     # name this repository's NuGet.config expands
+    #   docker compose build
+    #
+    # A token exported under the wrong name leaves the feed request unauthenticated, and every
+    # Nur.Tricenter.* package fails with NU1301 401 — which reads like a missing package rather
+    # than a missing environment variable.
+    build:
+      context: .
+      dockerfile: src/Identity.App/Dockerfile
+    container_name: identity-standalone-migrate
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=db;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+      # AddSecurity refuses to compose without a signing key, and --migrate
+      # builds the host, so the key is required even by the migration step.
+      # dev-only value: a signing key does not belong in version control.
+      Jwt__SecretKey: "dev-only-signing-key-not-a-secret-0123456789"
+      Jwt__ValidIssuer: "nur-tricenter-identity"
+      Jwt__ValidAudience: "nur-tricenter-clients"
+      Jwt__Lifetime: "3600"
+    networks: [identity-net]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Identity.App/Dockerfile
+    container_name: identity-standalone-api
+    ports:
+      - "7081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=db;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+
+      Jwt__SecretKey: "dev-only-signing-key-not-a-secret-0123456789"
+      Jwt__ValidIssuer: "nur-tricenter-identity"
+      Jwt__ValidAudience: "nur-tricenter-clients"
+      Jwt__Lifetime: "3600"
+
+      # Creates the built-in administrator on first boot. The seeder is
+      # idempotent by user name and never resets an existing credential, so
+      # leaving this on does not become a backdoor the way a password reset in
+      # the seeder would.
+      DefaultUser__Enabled: "true"
+      DefaultUser__UserName: "admin"
+      DefaultUser__Password: "admin"
+      DefaultUser__Email: "admin@nur.local"
+    networks: [identity-net]
+    depends_on:
+      db:
+        condition: service_healthy
+      api-migrate:
+        # The API must not serve traffic against a schema that does not exist.
+        condition: service_completed_successfully
+    healthcheck:
+      # /health, not the OpenAPI document: that is the endpoint a service
+      # registers itself with, so probing anything else measures a different
+      # contract than the one discovery depends on.
+      #
+      # curl, not a /dev/tcp probe: this stack builds its OWN image (the
+      # aspnet SDK build stage installs curl), so the "no curl in the runtime
+      # image" constraint that applies to the platform's bind-mounted
+      # containers does not apply here.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  workerservice:
+    build:
+      context: .
+      dockerfile: src/Identity.WorkerService/Dockerfile
+    container_name: identity-standalone-worker
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=db;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+
+      RabbitMqSettings__Host: "localhost"
+      RabbitMqSettings__UserName: "guest"
+      RabbitMqSettings__Password: "guest"
+      RabbitMqSettings__VirtualHost: "/"
+      RabbitMqSettings__MaxRetryAttempts: "3"
+      RabbitMqSettings__RetryBaseDelayMilliseconds: "500"
+
+      DefaultUser__Enabled: "true"
+      DefaultUser__UserName: "admin"
+      DefaultUser__Password: "admin"
+      DefaultUser__Email: "admin@nur.local"
+    networks: [identity-net]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # No port to probe: this host serves no HTTP at all. Reading the kernel's
+      # own view of the process needs no extra tool, and the runtime image
+      # ships no procps, so pgrep would fail forever while the worker is fine.
+      test: ["CMD-SHELL", "grep -qs 'Identity.WorkerService' /proc/*/cmdline || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  identity-db-data:
+
+networks:
+  identity-net:
+    # NOT external: this stack owns its network, which is what makes it
+    # independent. The orchestrator's stack uses the platform network instead.
+    name: identity-net

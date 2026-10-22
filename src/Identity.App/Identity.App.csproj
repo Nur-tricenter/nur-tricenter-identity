@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    The HTTP entry point. Two responsibilities:
+      POST /api/auth/login          issues a JWT bound to the user's scopes
+      GET  /api/auth/me             returns the authenticated principal
+    The outbox stays empty in this host: this project writes domain events
+    (UserCreated, UserUpdated) to the outbox but never drains them. The
+    WorkerService host owns the outbox processor, the guide's split.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Identity.App</RootNamespace>
+    <AssemblyName>Identity.App</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Identity.Application\Identity.Application.csproj" />
+    <ProjectReference Include="..\Identity.Infrastructure\Identity.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nur.Tricenter.Security" />
+    <PackageReference Include="Nur.Tricenter.Observability" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
+    <PackageReference Include="Consul" />
+    <PackageReference Include="MediatR" />
+    <!--
+      Design-time only. The `dotnet ef` tools require this on the STARTUP project, not on the
+      project that owns the DbContext, which is why it appears here as well as in Infrastructure.
+      PrivateAssets=all keeps it out of the published output: nothing at runtime needs it.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

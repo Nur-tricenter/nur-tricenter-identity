@@ -1,0 +1,145 @@
+# =============================================================================
+#  Identity: the two processes of one microservice.
+#
+#    identity-api            Identity.App         net8.0  (HTTP: login, /me, user creation)
+#    identity-workerservice  Identity.WorkerService net8.0 (outbox drain -> RabbitMQ, admin seed)
+#
+#  Naming convention (the orchestrator's)
+#  ---------------------------------------
+#    container_name: nur-tricenter-identity-<role>   the platform prefix says the
+#                                                    platform, the suffix the role.
+#    hostname:       identity-<role>                what the OTHER containers
+#                                                    resolve through Docker DNS.
+#
+#    The compose SERVICE name and the container name are the same word, so
+#    `docker compose ps` and `docker ps` never disagree.
+#
+#  Included by ../orchestrator's docker-compose.yml rather than started alone.
+#  These processes need the platform Postgres, RabbitMQ and Consul, which the
+#  orchestrator's infra file owns; starting them here would mean two projects
+#  managing one network.
+#
+#  Every connection string points at the CONTAINER hostname
+#  (nur-tricenter-postgres, not localhost): inside a container, localhost is
+#  that container's own loopback.
+# =============================================================================
+
+services:
+  identity-api:
+    image: mcr.microsoft.com/dotnet/aspnet:8.0
+    container_name: nur-tricenter-identity-api
+    hostname: identity-api
+    working_dir: /app
+    command: ["dotnet", "Identity.App.dll"]
+    volumes:
+      - ./src/Identity.App/bin/Debug/net8.0:/app:ro
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+
+      # The identity database, not the catalog's. Created by
+      # 01-create-databases.sql at the platform Postgres volume's first boot.
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=nur-tricenter-postgres;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+
+      # Bearer validation. AddSecurity refuses to compose without the key, and
+      # it must be the SAME value the API signs with — the worker and the
+      # gateway both validate what this issues.
+      Jwt__SecretKey: "dev-only-signing-key-not-a-secret-0123456789"
+      Jwt__ValidIssuer: "nur-tricenter-identity"
+      Jwt__ValidAudience: "nur-tricenter-clients"
+      Jwt__Lifetime: "3600"
+
+      # Seed the default administrator on startup, so a fresh stack is usable
+      # without having to log in first to grant itself anything. The seeder is
+      # idempotent by user name and never resets an existing credential.
+      DefaultUser__Enabled: "true"
+      DefaultUser__UserName: "admin"
+      DefaultUser__Password: "admin"
+      DefaultUser__Email: "admin@nur.local"
+
+      # Self-registration so the gateway discovers this instance instead of
+      # holding a static address list. Host and Port are PINNED, not sniffed:
+      # during hosted-service startup Kestrel's bound address is usually still
+      # unresolved, so resolving it there produces a registration that
+      # disagrees with what the gateway is told to dial.
+      ServiceRegistration__ServiceDiscoveryAddress: "http://nur-tricenter-consul:8500"
+      ServiceRegistration__Host: "identity-api"
+      ServiceRegistration__Port: "8080"
+      ServiceRegistration__ServiceName: "identity-service"
+    networks: [nur-tricenter-net]
+    depends_on:
+      db:
+        condition: service_healthy
+      consul:
+        condition: service_started
+    healthcheck:
+      # A shell TCP probe, not curl: the aspnet runtime image ships no curl, so
+      # a check that calls it fails with "curl: not found" forever and the
+      # container is reported unhealthy while the application is fine.
+      # /dev/tcp is part of bash, which is present.
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  identity-workerservice:
+    image: mcr.microsoft.com/dotnet/aspnet:8.0
+    container_name: nur-tricenter-identity-workerservice
+    hostname: identity-workerservice
+    working_dir: /app
+    command: ["dotnet", "Identity.WorkerService.dll"]
+    volumes:
+      - ./src/Identity.WorkerService/bin/Debug/net8.0:/app:ro
+    environment:
+      DOTNET_ENVIRONMENT: Development
+
+      ConnectionStrings__IdentityDatabaseConnectionString: "Host=nur-tricenter-postgres;Port=5432;Database=nur_tricenter_identity;Username=dev-only;Password=dev-only-password"
+
+      # Publisher side only. The broker must be reachable on 5672:
+      # Joseco.Communication.External.RabbitMQ 1.1.0 ignores RabbitMqSettings.Port
+      # and builds its ConnectionFactory from Host/UserName/Password alone.
+      RabbitMqSettings__Host: "nur-tricenter-rabbitmq"
+      RabbitMqSettings__UserName: "guest"
+      RabbitMqSettings__Password: "guest"
+      RabbitMqSettings__VirtualHost: "/"
+      RabbitMqSettings__MaxRetryAttempts: "3"
+      RabbitMqSettings__RetryBaseDelayMilliseconds: "500"
+
+      DefaultUser__Enabled: "true"
+      DefaultUser__UserName: "admin"
+      DefaultUser__Password: "admin"
+      DefaultUser__Email: "admin@nur.local"
+    networks: [nur-tricenter-net]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        # service_healthy, not service_started: the outbox processor connects as
+        # soon as it starts, and a broker still booting turns every publish
+        # attempt into an exception on every poll until it settles.
+        condition: service_healthy
+    # NOT registered in Consul, deliberately.
+    #
+    # Consul registration exists so the gateway can route traffic somewhere. The
+    # worker publishes to RabbitMQ and serves no HTTP at all: no listener, no
+    # controller, no address to register. Registering it would advertise a route
+    # to an endpoint that cannot answer, and the gateway would proxy into a black
+    # hole. Its liveness is a container concern, not a routing concern.
+    healthcheck:
+      # /proc/<pid>/cmdline rather than pgrep: the aspnet runtime image ships no
+      # procps, so `pgrep: not found` fails the check forever while the worker is
+      # running perfectly. There is no port to probe either — no listener.
+      test: ["CMD-SHELL", "grep -qs 'Identity.WorkerService' /proc/*/cmdline || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+networks:
+  nur-tricenter-net:
+    # The platform network, owned by the orchestrator's infra compose. Identity
+    # attaches to it and resolves Postgres, RabbitMQ and Consul by container name.
+    external: true

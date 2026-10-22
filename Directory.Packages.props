@@ -1,0 +1,122 @@
+<Project>
+
+  <!--
+    Versions every project in this service shares.
+
+    Why this file exists: every package pinning lives here, every new
+    microservice cloned from this repository inherits the same set. Two
+    projects ending up on different versions of the same package is a
+    runtime type mismatch rather than a build error, so it is worth the
+    discipline of pinning in one place.
+
+    Every project uses Central Package Management, so the version lives
+    once and the PackageReference stays bare.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="Nur-Tricenter platform kernels">
+    <!--
+      Published to GitHub Packages, not vendored. A service consumes a
+      kernel the way it consumes any other dependency, which is what keeps
+      this repository independent: nothing here knows where the shared
+      kernels live on disk.
+    -->
+    <!--
+      1.0.4 is the version the shared kernels actually publish
+      (nur-tricenter-shared-kernels/Directory.Build.props sets <Version>1.0.4</Version>
+      for all four kernels). 1.0.0 never existed on the feed, so pinning it here
+      made every restore of this service fail with NU1301 401. Older 1.0.2 builds
+      exist only under the dashed id `nur-tricenter-security`, which is the
+      mis-derived PackageId the kernel's own Directory.Build.props warns about;
+      the dotted `Nur.Tricenter.Security` id is the deliberate one.
+    -->
+    <PackageVersion Include="Nur.Tricenter.Security" Version="1.0.4" />
+  </ItemGroup>
+
+  <ItemGroup Label="Joseco">
+    <!--
+      The vendor libraries this service is built on. They are generic
+      infrastructure with no domain logic: DDD base types, the transactional
+      outbox, the RabbitMQ transport, and the integration-message base
+      record.
+    -->
+    <PackageVersion Include="Joseco.DDD.Core" Version="1.0.3" />
+    <PackageVersion Include="Joseco.Outbox.Contracts" Version="1.0.2" />
+    <PackageVersion Include="Joseco.Outbox.EFCore" Version="1.1.0" />
+    <PackageVersion Include="Joseco.Communication.External.Contracts" Version="1.0.1" />
+    <PackageVersion Include="Joseco.Communication.External.RabbitMQ" Version="1.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Entity Framework (Postgres)">
+    <!-- 9.0.4 is the version the platform pins. EF 10.x would force a move
+         on the whole service because the NuGet dependencies target net8.0. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup Label="Extensions">
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.3" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.3" />
+    <!-- ILogger<T> for the application layer's integration publishers, which log what they
+         publish. Abstractions only: the concrete logging provider is a host-level decision. -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="Observability">
+    <!--
+      Traces, metrics and structured logging come from the platform kernel rather than from each
+      service wiring its own. The reason to want the kernel is the meter collection rule: a meter
+      whose name is not on the kernel's list is silently NOT exported, so a service that wires
+      OpenTelemetry itself tends to produce metrics that never arrive anywhere.
+
+      OpenTelemetry.Api is pinned to 1.16.0, not the 1.12.0 Joseco.Communication 1.1.0 drags in,
+      because 1.12.0 carries advisory GHSA-g94r-2vxg-569j (NU1902). 1.16.0 is the lowest
+      non-vulnerable version, so the whole graph converges there instead of drifting.
+    -->
+    <PackageVersion Include="Nur.Tricenter.Observability" Version="1.0.4" />
+    <PackageVersion Include="OpenTelemetry.Api" Version="1.16.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Serilog">
+    <!--
+      Exactly what Nur.Tricenter.Observability 1.0.4 depends on (read from its nuspec), so the
+      graph converges instead of drifting. Pinning anything lower produces NU1605 "package
+      downgrade detected", which Central Package Management treats as an ERROR. Keep in step with
+      the kernel: if the kernel moves, move this with it.
+    -->
+    <PackageVersion Include="Serilog.Enrichers.Span" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Application">
+    <!--
+      MediatR 14 is pinned to 10.0.0 of the host abstractions, which the shared kernels
+      cannot provide; stay on the 12.x line whose last release still targets the
+      9.0.x abstractions. Joseco.Outbox.EFCore 1.1.0 sets a 12.4.1 floor so 12.4.1 it is.
+    -->
+    <PackageVersion Include="MediatR" Version="12.4.1" />
+    <PackageVersion Include="Scrutor" Version="6.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Security">
+    <!--
+      Password hashing. Bcrypt rather than a bare SHA because a fast hash makes an offline
+      dictionary attack against a leaked table cheap: the whole point of storing a password
+      digest is to make guessing it expensive, and a deliberately slow KDF is what buys that.
+      Bcrypt embeds its own salt and work factor in the stored value, so upgrading the cost
+      later only affects new hashes.
+    -->
+    <PackageVersion Include="BCrypt.Net-Next" Version="4.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hosting">
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <PackageVersion Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+    <PackageVersion Include="Consul" Version="1.7.14.7" />
+  </ItemGroup>
+
+</Project>

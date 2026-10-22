@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!--
+    The outbox drain and the integration-publish handlers live here. The
+    host is a plain HostBuilder, no HTTP, no MVC: it sets up the
+    OutboxBackgroundService and is done.
+
+    This is the only host where the AddIntegrationMessaging registrations
+    are visible, mirroring the guide's pattern in section 4.2. Identity.App
+    leaves them out because it never needs IExternalPublisher for an
+    outbox publish. The publish happens off the in-process outbox queue
+    that the Worker drains.
+
+    Serilog is referenced directly rather than only through the kernel's
+    UseLogging extension: that extension is declared on IHostBuilder, and
+    this host composes with Host.CreateDefaultBuilder, so the same enrichers
+    the kernel applies are spelled out in Program.cs instead. Keep that list
+    in step with Nur.Tricenter.Observability.Tracing.ObservabilityExtensions.UseLogging.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Identity.WorkerService</RootNamespace>
+    <AssemblyName>Identity.WorkerService</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Identity.Application\Identity.Application.csproj" />
+    <ProjectReference Include="..\Identity.Infrastructure\Identity.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Nur.Tricenter.Security is deliberately NOT referenced here. A worker never authorises a
+      request, so AddSecurity and JwtOptions would be dead weight pulling an ASP.NET framework
+      reference into a process that serves no HTTP.
+    -->
+    <PackageReference Include="Nur.Tricenter.Observability" />
+    <!--
+      Serilog.Enrichers.Span is named directly because WithSpan is what stamps TraceId/SpanId onto
+      every line, and it is not exposed as a compile asset through the kernel. Its version lives in
+      Directory.Packages.props, pinned to exactly what the kernel depends on.
+    -->
+    <PackageReference Include="Serilog.Enrichers.Span" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+</Project>

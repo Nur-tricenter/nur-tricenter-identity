@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Common MSBuild properties shared by every project under src/.
+
+    The shared kernels target net8.0; this service follows them. Do not move
+    to net9+ without moving the kernels too: the consumers of the kernels
+    pin their net8.0 contract.
+  -->
+
+  <PropertyGroup>
+    <!-- Cross-project conventions: langversion, nullable, implicit usings. -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Target framework">
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Nullable and warnings">
+    <NoWarn>$(NoWarn);CA1062</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>
