@@ -10,7 +10,7 @@
     transported. That is what keeps the domain testable without a database.
 
     Following the reference architecture: Identity has no Domain project, so the
-    user-shaped invariants live here — factory methods that decide whether an
+    user-shaped invariants live here â€” factory methods that decide whether an
     account is valid, and the events it raises when it changes. See section 3.3
     of the guide.
   -->
@@ -22,12 +22,15 @@
 
   <ItemGroup>
     <PackageReference Include="Joseco.DDD.Core" />
+    <!-- Integration contracts live in the shared kernel so identity publishes the same
+         type the catalog consumes. -->
+    <PackageReference Include="Nur.Tricenter.Integration" />
     <PackageReference Include="Joseco.Outbox.Contracts" />
     <!--
       Referenced for the interfaces the integration publishers implement:
       IExternalPublisher, INotificationHandler, IServiceCollection and
       IntegrationMessage. The RabbitMQ transport that IMPLEMENTS IExternalPublisher
-      is deliberately not referenced here — the application layer states what is
+      is deliberately not referenced here â€” the application layer states what is
       published, never how it travels.
     -->
     <PackageReference Include="Joseco.Communication.External.Contracts" />

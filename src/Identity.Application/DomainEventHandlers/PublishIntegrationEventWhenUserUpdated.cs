@@ -1,5 +1,5 @@
 using Identity.Application.Contracts;
-using Identity.Application.Contracts.Integration;
+using Nur.Tricenter.Integration.Messages.Identity;
 using Identity.Application.Events;
 using Joseco.Communication.External.Contracts.Services;
 using Joseco.Outbox.Contracts.Model;
