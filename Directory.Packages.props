@@ -33,9 +33,9 @@
       mis-derived PackageId the kernel's own Directory.Build.props warns about;
       the dotted `Nur.Tricenter.Security` id is the deliberate one.
     -->
-    <PackageVersion Include="Nur.Tricenter.Security" Version="1.0.9" />
-    <PackageVersion Include="Nur.Tricenter.Integration" Version="1.0.9" />
-    <PackageVersion Include="Nur.Tricenter.Access" Version="1.0.9" />
+    <PackageVersion Include="Nur.Tricenter.Security" Version="1.1.0" />
+    <PackageVersion Include="Nur.Tricenter.Integration" Version="1.1.0" />
+    <PackageVersion Include="Nur.Tricenter.Access" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup Label="Joseco">
@@ -80,7 +80,7 @@
       because 1.12.0 carries advisory GHSA-g94r-2vxg-569j (NU1902). 1.16.0 is the lowest
       non-vulnerable version, so the whole graph converges there instead of drifting.
     -->
-    <PackageVersion Include="Nur.Tricenter.Observability" Version="1.0.9" />
+    <PackageVersion Include="Nur.Tricenter.Observability" Version="1.1.0" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.16.0" />
   </ItemGroup>
 
