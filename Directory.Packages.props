@@ -47,9 +47,9 @@
     -->
     <PackageVersion Include="Joseco.DDD.Core" Version="1.0.3" />
     <PackageVersion Include="Joseco.Outbox.Contracts" Version="1.0.2" />
-    <PackageVersion Include="Joseco.Outbox.EFCore" Version="1.2.0" />
+    <PackageVersion Include="Joseco.Outbox.EFCore" Version="1.1.0" />
     <PackageVersion Include="Joseco.Communication.External.Contracts" Version="1.0.1" />
-    <PackageVersion Include="Joseco.Communication.External.RabbitMQ" Version="1.2.0" />
+    <PackageVersion Include="Joseco.Communication.External.RabbitMQ" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup Label="Entity Framework (Postgres)">
